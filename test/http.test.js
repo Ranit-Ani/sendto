@@ -4,7 +4,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const app = require('../server');
+
+// Some checks serve the built React app, so they need `npm run build` to have run.
+// Without a build they are skipped instead of failing (CI builds first, then tests).
+const built = fs.existsSync(path.join(__dirname, '..', 'public', 'index.html'));
 
 let server;
 let base;
@@ -49,7 +55,7 @@ test('unknown API paths return a JSON 404', async () => {
   assert.equal((await res.json()).error.code, 'NOT_FOUND');
 });
 
-test('app pages return 200 and unknown pages return a real 404', async () => {
+test('app pages return 200 and unknown pages return a real 404', { skip: !built && 'frontend not built' }, async () => {
   assert.equal((await fetch(`${base}/send-files`)).status, 200);
   assert.equal((await fetch(`${base}/privacy/`)).status, 200);
   assert.equal((await fetch(`${base}/definitely-not-a-page`)).status, 404);
@@ -116,9 +122,7 @@ test('uploads are refused when total storage would pass the cap', async () => {
   }
 });
 
-test('hashed assets are cached for good, index.html is always revalidated', async () => {
-  const fs = require('fs');
-  const path = require('path');
+test('hashed assets are cached for good, index.html is always revalidated', { skip: !built && 'frontend not built' }, async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const css = html.match(/href="(\/assets\/[^"]+\.css)"/);
   assert.ok(css, 'the built page should link a hashed, bundled stylesheet');

@@ -15,7 +15,8 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
-      - name: Backend tests
-        run: npm test
+      # Build first: some tests serve the built React app from public/.
       - name: Build the frontend
         run: npm run build
+      - name: Backend tests
+        run: npm test
