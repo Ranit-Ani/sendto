@@ -1,0 +1,43 @@
+# Render Blueprint — deploy with "New > Blueprint" and point it at your repo.
+#
+# SendTo is stateless: share data lives in MongoDB Atlas and uploaded files live
+# in Google Drive, so no persistent disk is needed. Secrets marked `sync: false`
+# are asked for in the Render dashboard the first time the Blueprint is applied.
+
+services:
+  - type: web
+    name: sendto
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_VERSION
+        value: 24.11.0
+      # Render generates this once and keeps it stable across deploys.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+
+      # MongoDB Atlas
+      - key: MONGODB_URI
+        sync: false
+
+      # Google Drive (run `npm run google:auth` locally to get these)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false
+
+      - key: MAX_FILE_SIZE
+        value: "104857600"
+      - key: DEFAULT_EXPIRY_MINUTES
+        value: "1440"

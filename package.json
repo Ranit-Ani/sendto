@@ -1,0 +1,28 @@
+{
+  "name": "sendto",
+  "version": "1.0.0",
+  "description": "Share files and text with a 6-digit code. No account needed.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "npm --prefix client install && npm --prefix client run build",
+    "client:dev": "npm --prefix client run dev",
+    "google:auth": "node scripts/google-auth.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@googleapis/drive": "^26.0.1",
+    "bcryptjs": "^3.0.2",
+    "docx": "^9.0.2",
+    "dotenv": "^17.0.0",
+    "express": "^4.21.1",
+    "google-auth-library": "^11.1.0",
+    "mongoose": "^9.10.2",
+    "multer": "^2.0.2",
+    "pdfkit": "^0.20.2"
+  }
+}
