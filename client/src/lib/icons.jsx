@@ -19,16 +19,23 @@ export function PencilIcon(props) {
 export function LogoIcon(props) {
   return (
     <svg className="brand__mark" viewBox="0 0 40 40" aria-hidden="true" {...props}>
-      <circle cx="20" cy="20" r="20" fill="#fff"></circle>
+      <defs>
+        <linearGradient id="st-bg" x1="4" y1="2" x2="36" y2="38" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#8B5CF6"></stop>
+          <stop offset="1" stopColor="#4F2BD8"></stop>
+        </linearGradient>
+        <linearGradient id="st-plane" x1="10" y1="10" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFFFFF"></stop>
+          <stop offset="1" stopColor="#E4DAFF"></stop>
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="11" fill="url(#st-bg)"></rect>
       <path
-        d="M25.5 13.5c-3.4-2-7.6-1-9.4 2.2-1 1.8-.9 3.9.1 5.6M14.5 26.5c3.4 2 7.6 1 9.4-2.2 1-1.8.9-3.9-.1-5.6"
-        stroke="#20c76a"
-        strokeWidth="3"
-        strokeLinecap="round"
-        fill="none"
+        d="M29.6 10.6 9.8 18.7c-.8.3-.8 1.4-.1 1.8l5.6 2.9 2.9 5.6c.4.8 1.5.7 1.8-.1l8.1-19.8c.4-.9-.6-1.8-1.5-1.5Z"
+        fill="url(#st-plane)"
       ></path>
-      <circle cx="27" cy="16" r="2.6" fill="#2864e8"></circle>
-      <circle cx="13" cy="24" r="2.6" fill="#2864e8"></circle>
+      <path d="m15.3 23.4 10.4-9.6-7.5 11.8Z" fill="#4F2BD8" fillOpacity=".28"></path>
+      <path d="M8 27.5h4M6.5 31.5h5.5" stroke="#FFFFFF" strokeOpacity=".55" strokeWidth="2" strokeLinecap="round" fill="none"></path>
     </svg>
   );
 }

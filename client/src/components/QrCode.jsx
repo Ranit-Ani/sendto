@@ -8,7 +8,7 @@ export default function QrCode({ value, size = 176 }) {
     let cancelled = false;
     import('qrcode')
       .then(({ default: QRCode }) =>
-        QRCode.toDataURL(value, { margin: 1, width: size * 2, color: { dark: '#0f172a', light: '#ffffff' } })
+        QRCode.toDataURL(value, { margin: 1, width: size * 2, color: { dark: '#100c1f', light: '#ffffff' } })
       )
       .then((url) => {
         if (!cancelled) setSrc(url);
