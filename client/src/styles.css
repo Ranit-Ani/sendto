@@ -1279,6 +1279,12 @@ select {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-soft);
   padding: 1.85rem 1.6rem;
+  /* Everything in the card (icon, title, text) sits in the middle. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .feature-card__icon {
@@ -1303,6 +1309,7 @@ select {
 
 .feature-card p {
   margin: 0;
+  max-width: 34ch;
   font-size: 0.88rem;
   line-height: 1.65;
   color: var(--text-muted);
