@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useToast } from '../context/ToastContext.jsx';
+import { CONTACT_EMAIL } from '../lib/site.js';
 
 const PRODUCT_LINKS = [
   { label: 'Upload Files', href: '/send-files' },
@@ -8,16 +8,17 @@ const PRODUCT_LINKS = [
   { label: 'Receive Text', href: '/receive-text' }
 ];
 
-const SUPPORT_LINKS = ['About', 'Help Center', 'Contact Us', 'Privacy Policy'];
+const SUPPORT_LINKS = [
+  { label: 'About', href: '/about' },
+  { label: 'Help Center', href: '/help' },
+  // Only shown once a contact address is set in lib/site.js
+  ...(CONTACT_EMAIL ? [{ label: 'Contact Us', href: '/contact' }] : []),
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Use', href: '/terms' }
+];
 
 export default function Footer() {
-  const toast = useToast();
   const year = new Date().getFullYear();
-
-  function handlePlaceholder(event) {
-    event.preventDefault();
-    toast("This page isn't built yet.", 'info');
-  }
 
   return (
     <footer className="site-footer">
@@ -44,11 +45,9 @@ export default function Footer() {
           <nav className="site-footer__col" aria-label="Support">
             <p className="site-footer__heading">Support</p>
             <ul>
-              {SUPPORT_LINKS.map((label) => (
-                <li key={label}>
-                  <a href="#" onClick={handlePlaceholder}>
-                    {label}
-                  </a>
+              {SUPPORT_LINKS.map((link) => (
+                <li key={link.label}>
+                  <Link to={link.href}>{link.label}</Link>
                 </li>
               ))}
             </ul>

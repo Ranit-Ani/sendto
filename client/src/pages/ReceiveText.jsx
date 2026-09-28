@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useReceiveFlow } from '../hooks/useReceiveFlow.js';
+import { useLimits, formatDuration } from '../lib/limits.js';
 import { api, copyText, formatRemaining } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.jsx';
 import BusyButton from '../components/BusyButton.jsx';
+import { ScanIcon } from '../lib/icons.jsx';
 import InfoBlocks from '../components/InfoBlocks.jsx';
 
-const INFO_ITEMS = [
+// Loaded only when someone taps "Scan QR code", so the camera code stays out of the main bundle.
+const QrScanner = lazy(() => import('../components/QrScanner.jsx'));
+
+const buildInfoItems = ({ defaultExpiryMinutes }) => [
   {
     icon: '🚀',
     title: 'How to Receive Text?',
@@ -28,7 +33,7 @@ const INFO_ITEMS = [
     body: (
       <p>
         Text is transferred over encrypted connections and automatically{' '}
-        <span className="accent">permanently deleted</span> after 24 hours (or sooner if the sender set a limit).
+        <span className="accent">permanently deleted</span> after {formatDuration(defaultExpiryMinutes)} (or sooner if the sender set a limit).
       </p>
     )
   },
@@ -46,7 +51,9 @@ const INFO_ITEMS = [
 
 export default function ReceiveText() {
   const toast = useToast();
+  const limits = useLimits();
   const [payload, setPayload] = useState(null);
+  const [scanning, setScanning] = useState(false);
   const [formats, setFormats] = useState([{ id: 'txt', label: 'Plain text', extension: 'txt' }]);
   const [format, setFormat] = useState('txt');
 
@@ -61,6 +68,7 @@ export default function ReceiveText() {
     checking,
     unlocking,
     lookup,
+    submitCode,
     unlock,
     reset
   } = useReceiveFlow({
@@ -89,8 +97,9 @@ export default function ReceiveText() {
     };
   }, []);
 
-  function handleReload() {
-    window.location.reload();
+  function handleReset() {
+    setPayload(null);
+    reset();
   }
 
   async function handleCopyText() {
@@ -159,6 +168,22 @@ export default function ReceiveText() {
           >
             Receive Text
           </BusyButton>
+
+          <button className="btn btn--secondary btn--block mt-lg" type="button" onClick={() => setScanning(true)}>
+            <ScanIcon />
+            <span>Scan QR code</span>
+          </button>
+          {scanning && (
+            <Suspense fallback={null}>
+              <QrScanner
+                onClose={() => setScanning(false)}
+                onCode={(scanned) => {
+                  setScanning(false);
+                  submitCode(scanned);
+                }}
+              />
+            </Suspense>
+          )}
         </section>
       )}
 
@@ -201,10 +226,7 @@ export default function ReceiveText() {
           <button
             className="btn btn--ghost btn--block mt-lg"
             type="button"
-            onClick={() => {
-              setPayload(null);
-              reset();
-            }}
+            onClick={handleReset}
           >
             Use a different code
           </button>
@@ -252,13 +274,13 @@ export default function ReceiveText() {
             </button>
           </div>
 
-          <button className="btn btn--ghost btn--block mt-lg" type="button" onClick={handleReload}>
+          <button className="btn btn--ghost btn--block mt-lg" type="button" onClick={handleReset}>
             Receive another code
           </button>
         </section>
       )}
 
-      <InfoBlocks items={INFO_ITEMS} />
+      <InfoBlocks items={buildInfoItems(limits)} />
     </main>
   );
 }

@@ -7,6 +7,11 @@ import SendFiles from './pages/SendFiles.jsx';
 import ReceiveFiles from './pages/ReceiveFiles.jsx';
 import SendText from './pages/SendText.jsx';
 import ReceiveText from './pages/ReceiveText.jsx';
+import About from './pages/About.jsx';
+import Help from './pages/Help.jsx';
+import Privacy from './pages/Privacy.jsx';
+import Terms from './pages/Terms.jsx';
+import Contact from './pages/Contact.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 export default function App() {
@@ -19,6 +24,11 @@ export default function App() {
         <Route path="/receive-files" element={<ReceiveFiles />} />
         <Route path="/send-text" element={<SendText />} />
         <Route path="/receive-text" element={<ReceiveText />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/help" element={<Help />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Footer />

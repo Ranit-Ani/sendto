@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { upload, formatBytes } from '../lib/api.js';
+import { useLimits, formatDuration } from '../lib/limits.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { FileIcon, TrashIcon, UploadCloudIcon } from '../lib/icons.jsx';
 import OptionsFields, { EMPTY_OPTIONS } from '../components/OptionsFields.jsx';
@@ -7,10 +8,9 @@ import BusyButton from '../components/BusyButton.jsx';
 import ResultCard from '../components/ResultCard.jsx';
 import InfoBlocks from '../components/InfoBlocks.jsx';
 
-const MAX_FILES = 10;
-const MAX_SIZE = 100 * 1024 * 1024; // keep in step with MAX_FILE_SIZE on the server
-
-const INFO_ITEMS = [
+// Built from the server's limits (GET /api/config), so the page never drifts
+// out of step with MAX_FILE_SIZE / MAX_FILES / DEFAULT_EXPIRY_MINUTES.
+const buildInfoItems = ({ maxFiles, maxFileSize, defaultExpiryMinutes }) => [
   {
     icon: '🚀',
     title: 'How to Send Files?',
@@ -18,7 +18,7 @@ const INFO_ITEMS = [
       <ol className="info-steps">
         <li>Drag &amp; drop files, or choose them from your device.</li>
         <li>
-          Set an optional <strong>password</strong>, download limit, or expiry timer.
+          Set an optional <strong>password</strong>, view limit, or expiry timer.
         </li>
         <li>
           Tap <strong>Send Files</strong> to upload.
@@ -32,8 +32,8 @@ const INFO_ITEMS = [
     title: 'Secure & Private',
     body: (
       <p>
-        Files travel over encrypted connections and are <span className="accent">automatically deleted</span> after
-        24 hours — or sooner if you set a stricter download limit or expiry.
+        Files travel over encrypted connections and are <span className="accent">automatically deleted</span> after{' '}
+        {formatDuration(defaultExpiryMinutes)} — or sooner if you set a stricter view limit or expiry.
       </p>
     )
   },
@@ -42,8 +42,8 @@ const INFO_ITEMS = [
     title: 'Supported File Types',
     body: (
       <p>
-        Send almost anything, up to <span className="accent">{MAX_FILES} files</span> at a time and{' '}
-        <span className="accent">100 MB</span> each: images, documents, videos, archives, and code files.
+        Send almost anything, up to <span className="accent">{maxFiles} files</span> at a time and{' '}
+        <span className="accent">{formatBytes(maxFileSize)}</span> each: images, documents, videos, archives, and code files.
       </p>
     )
   }
@@ -51,6 +51,9 @@ const INFO_ITEMS = [
 
 export default function SendFiles() {
   const toast = useToast();
+  const limits = useLimits();
+  const MAX_FILES = limits.maxFiles;
+  const MAX_SIZE = limits.maxFileSize;
   const fileInputRef = useRef(null);
 
   const [selected, setSelected] = useState([]);
@@ -96,7 +99,7 @@ export default function SendFiles() {
         return next;
       });
     },
-    []
+    [MAX_FILES, MAX_SIZE]
   );
 
   function removeFile(index) {
@@ -138,9 +141,11 @@ export default function SendFiles() {
       return;
     }
 
+    // Options go first: the server checks them as soon as the first file starts
+    // arriving, so a bad expiry or password is rejected before the upload runs.
     const form = new FormData();
-    selected.forEach((file) => form.append('files', file));
     Object.entries(options).forEach(([key, value]) => form.append(key, value));
+    selected.forEach((file) => form.append('files', file));
 
     setSending(true);
     setFormError('');
@@ -280,7 +285,7 @@ export default function SendFiles() {
         />
       )}
 
-      <InfoBlocks items={INFO_ITEMS} />
+      <InfoBlocks items={buildInfoItems(limits)} />
     </main>
   );
 }

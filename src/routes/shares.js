@@ -27,6 +27,33 @@ const lookupLimit = rateLimit({
   message: 'Too many code attempts. Wait a minute and try again.'
 });
 
+// Failed attempts only (unknown code, wrong password), counted over a longer
+// window. This is what makes guessing through the code space impractical.
+const failedLookups = rateLimit.failureLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: 'Too many wrong codes or passwords. Wait a few minutes and try again.'
+});
+const COUNTED_FAILURES = new Set(['NOT_FOUND', 'WRONG_PASSWORD']);
+
+function noteFailure(req, err) {
+  if (err && COUNTED_FAILURES.has(err.code)) failedLookups.fail(req);
+}
+
+/** Refuses a new upload when the total stored size would pass the cap. */
+async function checkStorage(req, res, next) {
+  try {
+    const incoming = Number(req.get('content-length')) || 0;
+    const used = await shareService.storedBytes();
+    if (used + incoming > config.limits.maxTotalStorage) {
+      throw new AppError(503, 'STORAGE_FULL', 'Storage is full right now. Please try again later.');
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 /* Helpers ----------------------------------------------------------- */
 
 function shareResponse(req, share) {
@@ -66,6 +93,17 @@ function cleanupUploadedFiles(files = []) {
 
 /* Routes ------------------------------------------------------------ */
 
+/** Limits the browser needs to validate input before uploading. */
+router.get('/config', (req, res) => {
+  res.json({
+    maxFiles: config.limits.maxFiles,
+    maxFileSize: config.limits.maxFileSize,
+    maxTextLength: config.limits.maxTextLength,
+    defaultExpiryMinutes: config.limits.defaultExpiryMinutes,
+    maxExpiryMinutes: config.limits.maxExpiryMinutes
+  });
+});
+
 /** Formats the receiver can convert shared text into. */
 router.get('/formats', (req, res) => {
   res.json({ formats: exportService.listFormats() });
@@ -74,7 +112,7 @@ router.get('/formats', (req, res) => {
 /** Share text. */
 router.post('/shares/text', createLimit, async (req, res, next) => {
   try {
-    const options = shareService.parseOptions(req.body);
+    const options = await shareService.parseOptions(req.body);
     const share = await shareService.createTextShare(req.body.text, options);
     res.status(201).json(shareResponse(req, share));
   } catch (err) {
@@ -83,9 +121,9 @@ router.post('/shares/text', createLimit, async (req, res, next) => {
 });
 
 /** Share one or more files. */
-router.post('/shares/files', createLimit, upload.array('files', config.limits.maxFiles), async (req, res, next) => {
+router.post('/shares/files', createLimit, checkStorage, upload.array('files', config.limits.maxFiles), async (req, res, next) => {
   try {
-    const options = shareService.parseOptions(req.body);
+    const options = await shareService.parseOptions(req.body);
     const files = (req.files || []).map((file) => ({
       // Browsers send latin1-decoded names; re-read them as UTF-8.
       originalName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
@@ -103,16 +141,17 @@ router.post('/shares/files', createLimit, upload.array('files', config.limits.ma
 });
 
 /** What kind of share is this, and does it need a password? */
-router.get('/shares/:code', lookupLimit, async (req, res, next) => {
+router.get('/shares/:code', lookupLimit, failedLookups.guard, async (req, res, next) => {
   try {
     res.json(await shareService.getShareInfo(req.params.code));
   } catch (err) {
+    noteFailure(req, err);
     next(err);
   }
 });
 
 /** Unlock a share: counts one view and returns the content. */
-router.post('/shares/:code/open', lookupLimit, async (req, res, next) => {
+router.post('/shares/:code/open', lookupLimit, failedLookups.guard, async (req, res, next) => {
   try {
     const { share, viewsLeft, files } = await shareService.openShare(
       req.params.code,
@@ -137,6 +176,7 @@ router.post('/shares/:code/open', lookupLimit, async (req, res, next) => {
       }))
     });
   } catch (err) {
+    noteFailure(req, err);
     next(err);
   }
 });

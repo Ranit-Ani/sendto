@@ -20,16 +20,20 @@ export default function OptionsFields({ options, onChange }) {
         </label>
 
         <label className="field">
-          <span className="field__label">Download Limit:</span>
+          <span className="field__label">View Limit:</span>
           <input
             className="input"
             type="number"
             min="1"
             max="10000"
             placeholder="Unlimited"
+            aria-describedby="view-limit-hint"
             value={options.maxViews}
             onChange={(e) => set('maxViews', e.target.value)}
           />
+          <span className="field__hint" id="view-limit-hint">
+            How many times the code can be opened. Downloads after opening don&apos;t count.
+          </span>
         </label>
 
         <div className="field">

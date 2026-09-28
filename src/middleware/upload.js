@@ -4,6 +4,7 @@ const { Transform } = require('stream');
 const multer = require('multer');
 const config = require('../config');
 const drive = require('../services/driveService');
+const shareService = require('../services/shareService');
 const { randomId } = require('../utils/ids');
 
 /** Passes bytes through untouched while counting them. */
@@ -29,6 +30,16 @@ class ByteCounter extends Transform {
  */
 class DriveStorage {
   _handleFile(req, file, cb) {
+    // Reject bad options (password, view limit, expiry) before a single byte
+    // goes to Drive. This works because the browser sends the option fields
+    // ahead of the files; if they arrive later, the route checks them again.
+    try {
+      shareService.validateOptions(req.body);
+    } catch (error) {
+      file.stream.resume();
+      return cb(error);
+    }
+
     const counter = new ByteCounter();
     let settled = false;
 

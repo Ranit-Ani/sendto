@@ -35,7 +35,13 @@ const config = {
   // Set SESSION_SECRET in production so tokens survive restarts.
   secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
 
+  // Optional. When set, shared text is encrypted (AES-256-GCM) before it is
+  // stored in MongoDB. Keep it stable: changing it makes old text unreadable.
+  textEncryptionKey: process.env.TEXT_ENCRYPTION_KEY || '',
+
   limits: {
+    // Total bytes of uploaded files kept at once (protects the Drive quota).
+    maxTotalStorage: Number(process.env.MAX_TOTAL_STORAGE) || 10 * 1024 * 1024 * 1024, // 10 GB
     maxFileSize: Number(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024, // 100 MB per file
     maxFiles: Number(process.env.MAX_FILES) || 10,
     maxTextLength: Number(process.env.MAX_TEXT_LENGTH) || 500_000, // characters

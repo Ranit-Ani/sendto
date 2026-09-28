@@ -2,8 +2,9 @@
 
 Share files and text with a 6-digit code. No account needed.
 
-Send something, get a code like `482731`, hand the code to whoever needs it. They
-type it in and get exactly what you sent. Optional password, expiry and view limit.
+Send something, get a code like `482731` (and a QR code), hand it to whoever needs it.
+They type the code in, or scan the QR, and get exactly what you sent. Optional password,
+expiry and view limit.
 
 ---
 
@@ -92,6 +93,7 @@ Everything lives in `.env` (see `.env.example`) and is read once in `src/config.
 | `SESSION_SECRET` | random | Signs download tokens. **Set this.** If it is left random, every restart invalidates links receivers already opened. |
 | `MONGODB_URI` | *required* | MongoDB Atlas connection string |
 | `MONGODB_DB_NAME` | from URI | Optional database name override |
+| `TEXT_ENCRYPTION_KEY` | *empty* | Optional. When set, shared text is encrypted (AES-256-GCM) before it is stored in MongoDB. Keep it stable: changing or losing it makes text saved earlier unreadable. |
 | `GOOGLE_CLIENT_ID` | *required* | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | *required* | Google OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | *required* | From `npm run google:auth` |
@@ -99,15 +101,16 @@ Everything lives in `.env` (see `.env.example`) and is read once in `src/config.
 | `GOOGLE_DRIVE_FOLDER_NAME` | `SendTo Uploads` | Name used for the auto-created folder |
 | `MAX_FILE_SIZE` | `104857600` (100 MB) | Per-file upload limit |
 | `MAX_FILES` | `10` | Files per share |
+| `MAX_TOTAL_STORAGE` | `10737418240` (10 GB) | Total bytes of uploaded files kept at once. New uploads are refused with `STORAGE_FULL` past this, which protects your Drive quota. |
 | `MAX_TEXT_LENGTH` | `500000` | Characters per text share |
 | `DEFAULT_EXPIRY_MINUTES` | `1440` (24 h) | Used when the sender leaves expiry blank |
 | `MAX_EXPIRY_MINUTES` | `43200` (30 d) | Longest expiry a sender can pick |
 
 The server refuses to start, with a message naming the missing variable, if `MONGODB_URI` or any `GOOGLE_*` credential is unset.
 
-If you raise `MAX_FILE_SIZE` or `MAX_FILES`, change the two matching constants at
-the top of `client/src/pages/SendFiles.jsx` (`MAX_SIZE`, `MAX_FILES`) so the
-browser rejects oversized files before uploading them, then `npm run build`.
+The browser reads `MAX_FILE_SIZE`, `MAX_FILES`, `MAX_TEXT_LENGTH` and the expiry
+settings from `GET /api/config`, so changing them in `.env` is enough. There are no
+limits to keep in sync by hand.
 
 ---
 
@@ -157,9 +160,23 @@ orphaned files: the next cleanup run retries.
   so nothing is publicly reachable; the only way to read a file is through this
   server with a valid code (and password, if set).
 - Download tokens are HMAC-signed and expire.
-- Code lookups are rate limited to 40 attempts per minute per IP, which makes
-  guessing your way through a million codes impractical. If you run more than one
-  server process, move that limiter (`src/middleware/rateLimit.js`) to Redis.
+- Code lookups are rate limited to 40 requests per minute per IP, and each IP may
+  only fail (unknown code or wrong password) 30 times per 10 minutes. On top of that,
+  a password-protected code locks for 10 minutes after 10 wrong passwords, no matter
+  which IPs they came from. Together these make guessing through a million codes
+  impractical. All of this is in memory: if you run more than one server process,
+  move `src/middleware/rateLimit.js` and the lockout in `shareService.js` to Redis.
+- Passwords are hashed and checked with async bcrypt, so a flood of password guesses
+  cannot freeze the event loop.
+- Bad options (password length, view limit, expiry) are rejected before a file upload
+  starts. The browser sends the option fields first and the server checks them as the
+  first file begins to arrive.
+- Total uploaded bytes are capped (`MAX_TOTAL_STORAGE`), so anonymous uploads cannot
+  fill the Drive account.
+- Security headers (CSP, `nosniff`, frame protection) come from `helmet`.
+- With `TEXT_ENCRYPTION_KEY` set, shared text is encrypted at rest in MongoDB.
+- CSV exports prefix cells starting with `=`, `+`, `-` or `@` so they cannot run as
+  spreadsheet formulas.
 - Files are served as attachments, never rendered inline, so an uploaded HTML
   file cannot run scripts on your domain.
 
@@ -176,7 +193,8 @@ orphaned files: the next cleanup run retries.
 | `GET` | `/api/shares/:code/files/:fileId?token=` | Download one file |
 | `GET` | `/api/shares/:code/export?format=&token=` | Download the text as `txt`, `md`, `html`, `csv`, `json`, `pdf` or `docx` |
 | `GET` | `/api/formats` | Formats the receiver can pick from |
-| `GET` | `/api/health` | Health check |
+| `GET` | `/api/config` | Limits the browser needs: file size and count, text length, expiry |
+| `GET` | `/api/health` | Health check. Returns `503` while MongoDB is not connected |
 
 Errors come back as `{ "error": { "code": "WRONG_PASSWORD", "message": "..." } }`.
 The browser branches on `code`; the `message` is written to be shown as-is.
@@ -190,11 +208,13 @@ with the markup escaped. `.json` gives you the text plus a line array. `.csv`
 splits on tabs into real columns when the text has tabs, otherwise writes one
 quoted row per line.
 
-`.pdf` uses the bundled DejaVu Sans Mono in `assets/fonts`, which covers Latin,
-Cyrillic, Greek and common symbols. It has no CJK glyphs, so Japanese, Chinese
-and Korean come out blank **in PDF only** — they are fine in every other format.
-To fix that, drop a CJK font into `assets/fonts` and point `PDF_FONT` in
-`src/services/exportService.js` at it.
+`.pdf` uses the bundled DejaVu Sans Mono in `assets/fonts` for Latin, Cyrillic, Greek
+and common symbols, and the bundled Noto Sans Bengali (SIL Open Font License, see
+`assets/fonts/NotoSansBengali-LICENSE.txt`) for Bengali. Each line is split into runs,
+so text that mixes Bengali and English renders correctly, including conjuncts.
+Other scripts (Japanese, Chinese, Korean, Arabic, Devanagari) come out blank **in PDF
+only**; they are fine in every other format. To add one, drop a font into
+`assets/fonts` and add a run type for it in `src/services/exportService.js`.
 
 ---
 
@@ -209,6 +229,11 @@ copies it into `public/assets/css/styles.css`, so always edit the copy under
 `client/public/`, never the one under the top-level `public/` directly, since
 the next build overwrites it.
 
+Set `CONTACT_EMAIL` in `client/src/lib/site.js` to turn on the Contact Us page and its
+footer link (it stays hidden while empty). The About, Help, Privacy and Terms pages live
+in `client/src/pages/`; read the Privacy and Terms text once and adjust it to your
+own situation before going public.
+
 The header nav is in `client/src/components/Header.jsx` (`NAV_LINKS` array)
 and the mobile bottom bar is in `client/src/components/BottomNav.jsx`
 (`NAV_ITEMS` array) — add a link by editing both.
@@ -219,7 +244,8 @@ and the mobile bottom bar is in `client/src/components/BottomNav.jsx`
 
 `render.yaml` in the project root is a ready-made blueprint. Push the project to
 GitHub, then in Render choose **New > Blueprint** and pick the repository. It
-reads the file, generates `SESSION_SECRET`, and asks you for the secrets marked
+builds the frontend on every deploy (`npm ci && npm run build`), generates
+`SESSION_SECRET` and `TEXT_ENCRYPTION_KEY`, and asks you for the secrets marked
 `sync: false`: `MONGODB_URI`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `GOOGLE_REFRESH_TOKEN` and `GOOGLE_DRIVE_FOLDER_ID`.
 
@@ -231,9 +257,9 @@ refused immediately either way and are removed on the next wake-up).
 ### Setting it up by hand instead
 
 1. **New > Web Service**, connect the repo, runtime **Node**.
-2. Build command `npm ci`, start command `npm start`.
+2. Build command `npm ci && npm run build`, start command `npm start`.
 3. Add the environment variables from the table above (`SESSION_SECRET`,
-   `MONGODB_URI`, the four `GOOGLE_*` values, `NODE_VERSION=24.11.0`).
+   `TEXT_ENCRYPTION_KEY`, `MONGODB_URI`, the four `GOOGLE_*` values, `NODE_VERSION=24.11.0`).
 
 Do not set `PORT` — Render provides it and the server reads it automatically.
 
@@ -257,6 +283,18 @@ NODE_ENV=production SESSION_SECRET=<long random string> MONGODB_URI=... npm star
 Behind nginx, raise the body limit to match `MAX_FILE_SIZE`
 (`client_max_body_size 100M;`). Back up nothing locally: your data is in Atlas
 and Drive.
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs the backend tests with Node's built-in test runner: option validation, tokens,
+text export (CSV formulas, Bengali PDF), encryption, the failed-attempt limiter, and
+HTTP checks including the upload guards. MongoDB and Google Drive are stubbed, so
+nothing external is needed. GitHub Actions (`.github/workflows/ci.yml`) runs the tests
+and a frontend build on every push and pull request.
 
 ## Troubleshooting
 
@@ -299,16 +337,18 @@ scripts/google-auth.js  one-time Google sign-in: prints refresh token + folder i
 src/config.js           every tunable, read from the environment
 src/db.js               MongoDB (Mongoose) connection
 src/models/Share.js     the shares collection schema
-src/utils/              code generation, access tokens, error type
+src/utils/              code generation, access tokens, text encryption, error type
 src/middleware/         Drive-streaming uploads, rate limiting, error responses
 src/services/           share logic, Google Drive access, text conversion
 src/routes/shares.js    the API
 client/                 React + Vite frontend — source of truth for the UI
   src/pages/            one file per route: SendFiles, ReceiveFiles, SendText, ReceiveText, Home
-  src/components/       Header, BottomNav, OptionsFields, ResultCard, etc.
+  src/components/       Header, BottomNav, OptionsFields, ResultCard, QrCode, QrScanner, etc.
+  src/lib/limits.js     reads the server's limits (/api/config) for the pages
   src/context/          Theme (light/dark) and Toast providers
   public/assets/css/    styles.css — edit this copy, not the one below
 public/                 BUILD OUTPUT ONLY — regenerated by `npm run build`;
                          do not hand-edit, it gets overwritten
-assets/fonts/           font used for PDF export
+assets/fonts/           fonts used for PDF export (Latin + Bengali)
+test/                   backend tests (`npm test`)
 ```

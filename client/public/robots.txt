@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+# Share links carry a private code; keep them out of search results.
+Disallow: /receive-files?code=
+Disallow: /receive-text?code=
+Disallow: /api/

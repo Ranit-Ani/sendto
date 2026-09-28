@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { api } from '../lib/api.js';
+import { useLimits, formatDuration } from '../lib/limits.js';
 import { useToast } from '../context/ToastContext.jsx';
 import OptionsFields, { EMPTY_OPTIONS } from '../components/OptionsFields.jsx';
 import BusyButton from '../components/BusyButton.jsx';
 import ResultCard from '../components/ResultCard.jsx';
 import InfoBlocks from '../components/InfoBlocks.jsx';
 
-const INFO_ITEMS = [
+const buildInfoItems = ({ maxTextLength, defaultExpiryMinutes }) => [
   {
     icon: '🚀',
     title: 'How to Send Text?',
@@ -28,8 +29,8 @@ const INFO_ITEMS = [
     title: 'Secure & Private',
     body: (
       <p>
-        Your text is stored securely and <span className="accent">automatically deleted</span> after 24 hours — or
-        sooner if you set a stricter limit.
+        Your text is stored securely and <span className="accent">automatically deleted</span> after{' '}
+        {formatDuration(defaultExpiryMinutes)} — or sooner if you set a stricter limit.
       </p>
     )
   },
@@ -38,8 +39,9 @@ const INFO_ITEMS = [
     title: 'Good to Know',
     body: (
       <p>
-        Great for sharing <span className="accent">passwords, config snippets, code, or quick notes</span>. There's
-        no character limit to worry about, and formatting is preserved exactly as pasted.
+        Great for sharing <span className="accent">passwords, config snippets, code, or quick notes</span>. You can
+        share up to <span className="accent">{maxTextLength.toLocaleString()} characters</span>, and formatting is
+        preserved exactly as pasted.
       </p>
     )
   }
@@ -47,6 +49,7 @@ const INFO_ITEMS = [
 
 export default function SendText() {
   const toast = useToast();
+  const limits = useLimits();
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -59,6 +62,10 @@ export default function SendText() {
 
     if (!text.trim()) {
       setFormError('Add some text before sending.');
+      return;
+    }
+    if (text.length > limits.maxTextLength) {
+      setFormError(`That text is too long. The limit is ${limits.maxTextLength.toLocaleString()} characters.`);
       return;
     }
 
@@ -122,7 +129,7 @@ export default function SendText() {
               onKeyDown={handleKeyDown}
             ></textarea>
             <span className="field__hint">
-              {count.toLocaleString()} character{count === 1 ? '' : 's'}
+              {count.toLocaleString()} / {limits.maxTextLength.toLocaleString()} character{count === 1 ? '' : 's'}
             </span>
           </label>
 
@@ -153,7 +160,7 @@ export default function SendText() {
         />
       )}
 
-      <InfoBlocks items={INFO_ITEMS} />
+      <InfoBlocks items={buildInfoItems(limits)} />
     </main>
   );
 }

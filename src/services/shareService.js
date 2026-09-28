@@ -7,6 +7,7 @@ const config = require('../config');
 const drive = require('./driveService');
 const AppError = require('../utils/AppError');
 const { randomCode, randomId } = require('../utils/ids');
+const { encryptText, decryptText } = require('../utils/textCrypto');
 
 /** Exhausted shares stay readable for this long so an open download can finish. */
 const GRACE_MS = 60 * 60 * 1000;
@@ -16,26 +17,23 @@ const GRACE_MS = 60 * 60 * 1000;
  * ------------------------------------------------------------------ */
 
 /**
- * Turns raw form values into stored settings.
- * Every option is optional: an empty form produces a plain share
- * that expires after the default window.
+ * Checks raw form values and returns them cleaned up, without doing any slow
+ * work. Cheap enough to run before a large upload starts, so bad options are
+ * rejected before any bytes are sent to Google Drive.
  */
-function parseOptions(body = {}) {
-  const now = Date.now();
-
+function validateOptions(body = {}) {
   // Password ------------------------------------------------------
-  const rawPassword = typeof body.password === 'string' ? body.password.trim() : '';
-  if (rawPassword && rawPassword.length > 200) {
+  const password = typeof body.password === 'string' ? body.password.trim() : '';
+  if (password.length > 200) {
     throw new AppError(400, 'INVALID_PASSWORD', 'Password must be 200 characters or fewer.');
   }
-  const passwordHash = rawPassword ? bcrypt.hashSync(rawPassword, 10) : null;
 
   // Maximum views -------------------------------------------------
   let maxViews = null;
   if (body.maxViews !== undefined && body.maxViews !== null && String(body.maxViews).trim() !== '') {
     maxViews = Number(body.maxViews);
     if (!Number.isInteger(maxViews) || maxViews < 1 || maxViews > 10000) {
-      throw new AppError(400, 'INVALID_MAX_VIEWS', 'Maximum views must be a whole number between 1 and 10000.');
+      throw new AppError(400, 'INVALID_MAX_VIEWS', 'View limit must be a whole number between 1 and 10000.');
     }
   }
 
@@ -58,10 +56,23 @@ function parseOptions(body = {}) {
     );
   }
 
+  return { password, maxViews, totalMinutes };
+}
+
+/**
+ * Turns raw form values into stored settings.
+ * Every option is optional: an empty form produces a plain share
+ * that expires after the default window.
+ */
+async function parseOptions(body = {}) {
+  const { password, maxViews, totalMinutes } = validateOptions(body);
+  // Async bcrypt keeps the event loop free while hashing.
+  const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
   return {
     passwordHash,
     maxViews,
-    expiresAt: now + totalMinutes * 60 * 1000
+    expiresAt: Date.now() + totalMinutes * 60 * 1000
   };
 }
 
@@ -109,7 +120,7 @@ async function createTextShare(text, options) {
 
   return insertWithFreshCode({
     type: 'text',
-    content: text,
+    content: encryptText(text),
     passwordHash: options.passwordHash,
     maxViews: options.maxViews,
     createdAt: Date.now(),
@@ -224,6 +235,39 @@ function sortedFiles(share) {
   return [...(share.files || [])].sort((a, b) => a.position - b.position);
 }
 
+/* Per-code password lockout ------------------------------------------ *
+ * Stops many different IPs from hammering one password-protected code.
+ * In-memory, like the rate limiter: use a shared store if you run several
+ * server processes.
+ */
+const MAX_PASSWORD_FAILURES = 10;
+const PASSWORD_LOCK_MS = 10 * 60 * 1000;
+const passwordFailures = new Map();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, entry] of passwordFailures) {
+    if (entry.resetAt < now) passwordFailures.delete(code);
+  }
+}, PASSWORD_LOCK_MS).unref();
+
+function assertNotLocked(code) {
+  const entry = passwordFailures.get(code);
+  if (entry && entry.resetAt >= Date.now() && entry.count >= MAX_PASSWORD_FAILURES) {
+    throw new AppError(
+      429,
+      'TOO_MANY_ATTEMPTS',
+      'Too many wrong passwords for this code. Try again in a few minutes.'
+    );
+  }
+}
+
+function recordPasswordFailure(code) {
+  const entry = passwordFailures.get(code);
+  if (entry && entry.resetAt >= Date.now()) entry.count += 1;
+  else passwordFailures.set(code, { count: 1, resetAt: Date.now() + PASSWORD_LOCK_MS });
+}
+
 /**
  * Verifies the password, counts one view and returns the shared content.
  * @param {string} code
@@ -244,16 +288,20 @@ async function openShare(code, password, expectedType) {
   }
 
   if (found.passwordHash) {
+    assertNotLocked(found.code);
     const supplied = typeof password === 'string' ? password : '';
     if (!supplied) {
       throw new AppError(401, 'PASSWORD_REQUIRED', 'This share is password protected.');
     }
-    if (!bcrypt.compareSync(supplied, found.passwordHash)) {
+    if (!(await bcrypt.compare(supplied, found.passwordHash))) {
+      recordPasswordFailure(found.code);
       throw new AppError(403, 'WRONG_PASSWORD', 'That password does not match.');
     }
+    passwordFailures.delete(found.code);
   }
 
   const share = await countView(found);
+  if (share.type === 'text') share.content = decryptText(share.content);
 
   return {
     share,
@@ -270,6 +318,7 @@ async function openShare(code, password, expectedType) {
 async function loadUnlockedShare(code) {
   const share = await findByCode(normaliseCode(code));
   assertNotExpired(share);
+  if (share.type === 'text') share.content = decryptText(share.content);
   return share;
 }
 
@@ -297,6 +346,16 @@ async function recordDownload(share, fileId) {
   } catch (error) {
     console.error('Could not record download:', (error && error.message) || error);
   }
+}
+
+/** Total bytes of files currently kept in Drive (from the share records). */
+async function storedBytes() {
+  const [row] = await Share.aggregate([
+    { $match: { type: 'file' } },
+    { $unwind: '$files' },
+    { $group: { _id: null, total: { $sum: '$files.size' } } }
+  ]);
+  return row ? row.total : 0;
 }
 
 /* ------------------------------------------------------------------ *
@@ -357,7 +416,9 @@ async function cleanupExpired() {
 }
 
 module.exports = {
+  validateOptions,
   parseOptions,
+  storedBytes,
   createTextShare,
   createFileShare,
   getShareInfo,

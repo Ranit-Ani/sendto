@@ -9,7 +9,8 @@
     "dev": "node --watch server.js",
     "build": "npm --prefix client install && npm --prefix client run build",
     "client:dev": "npm --prefix client run dev",
-    "google:auth": "node scripts/google-auth.js"
+    "google:auth": "node scripts/google-auth.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
@@ -21,6 +22,7 @@
     "dotenv": "^17.0.0",
     "express": "^4.21.1",
     "google-auth-library": "^11.1.0",
+    "helmet": "^8.3.0",
     "mongoose": "^9.10.2",
     "multer": "^2.0.2",
     "pdfkit": "^0.20.2"

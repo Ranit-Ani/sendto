@@ -10,7 +10,8 @@ services:
     runtime: node
     plan: starter
     region: oregon
-    buildCommand: npm ci
+    # Also builds the React frontend, so `public/` is always fresh on every deploy.
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
 
@@ -22,6 +23,10 @@ services:
         generateValue: true
       - key: NODE_ENV
         value: production
+      # Encrypts shared text at rest. Generated once and kept stable across deploys.
+      # If you change or delete it, text shares saved earlier become unreadable.
+      - key: TEXT_ENCRYPTION_KEY
+        generateValue: true
 
       # MongoDB Atlas
       - key: MONGODB_URI
@@ -39,5 +44,8 @@ services:
 
       - key: MAX_FILE_SIZE
         value: "104857600"
+      # Total uploaded bytes kept at once (10 GB). Keep it under your Drive quota.
+      - key: MAX_TOTAL_STORAGE
+        value: "10737418240"
       - key: DEFAULT_EXPIRY_MINUTES
         value: "1440"

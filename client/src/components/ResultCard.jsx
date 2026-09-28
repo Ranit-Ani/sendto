@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CheckIcon } from '../lib/icons.jsx';
 import { copyText, formatRemaining } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.jsx';
+import QrCode from './QrCode.jsx';
 
 export default function ResultCard({
   share,
@@ -62,6 +63,8 @@ export default function ResultCard({
           Copy Share Link
         </button>
       </div>
+
+      <QrCode value={share.link} />
 
       <div className="share-link">
         <input

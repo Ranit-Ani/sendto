@@ -14,7 +14,7 @@ const FEATURES = [
   {
     icon: SlidersIcon,
     title: 'Flexible Sharing Controls',
-    body: 'Choose how your shared content works. Set download limits or control how long your files and text remain available.'
+    body: 'Choose how your shared content works. Set a view limit, add a password, or control how long your files and text remain available.'
   },
   {
     icon: GridIcon,

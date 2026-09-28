@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LogoIcon, SunIcon, MoonIcon } from '../lib/icons.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
-import { useToast } from '../context/ToastContext.jsx';
 
 const NAV_LINKS = [
   { id: 'home', label: 'Home', href: '/' },
@@ -13,15 +12,9 @@ const NAV_LINKS = [
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
-  const toast = useToast();
   const location = useLocation();
 
   const currentPath = location.pathname === '/' ? '/' : location.pathname.replace(/\/$/, '');
-
-  function handleLogin(event) {
-    event.preventDefault();
-    toast('Accounts are optional and not built yet — sharing works without one.', 'info');
-  }
 
   return (
     <header className="site-header">
@@ -49,9 +42,6 @@ export default function Header() {
           >
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
-          <a className="btn btn--login" href="#" id="login-link" onClick={handleLogin}>
-            Login
-          </a>
         </div>
       </div>
     </header>

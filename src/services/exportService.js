@@ -72,7 +72,12 @@ function toHtml(text, code) {
 function toCsv(text) {
   const lines = toLines(text);
   const hasTabs = lines.some((line) => line.includes('\t'));
-  const quote = (cell) => `"${cell.replace(/"/g, '""')}"`;
+  // A cell starting with = + - @ (or a tab/CR) can run as a formula when the
+  // CSV is opened in Excel or Sheets. A leading apostrophe keeps it plain text.
+  const quote = (cell) => {
+    const safe = /^[=+\-@\t\r]/.test(cell) ? `'${cell}` : cell;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
 
   if (hasTabs) {
     return lines.map((line) => line.split('\t').map(quote).join(',')).join('\r\n');
@@ -89,7 +94,27 @@ function toJson(text, code) {
  * PDFKit's built-in Courier only covers WinAnsi.
  */
 const PDF_FONT = path.join(__dirname, '..', '..', 'assets', 'fonts', 'DejaVuSansMono.ttf');
+const PDF_FONT_BENGALI = path.join(__dirname, '..', '..', 'assets', 'fonts', 'NotoSansBengali-Regular.woff');
 const hasBundledFont = fs.existsSync(PDF_FONT);
+const hasBengaliFont = fs.existsSync(PDF_FONT_BENGALI);
+
+// Bengali block, the danda marks, and the joiners used inside conjuncts.
+const BENGALI_CHAR = /[\u0980-\u09FF\u0964\u0965\u200C\u200D]/;
+
+/**
+ * Splits a line into runs that each use one font. The Bengali font has no
+ * Latin punctuation and DejaVu has no Bengali, so each run gets the right one.
+ */
+function splitRuns(line) {
+  const runs = [];
+  for (const char of line) {
+    const bengali = hasBengaliFont && BENGALI_CHAR.test(char);
+    const last = runs[runs.length - 1];
+    if (last && last.bengali === bengali) last.text += char;
+    else runs.push({ bengali, text: char });
+  }
+  return runs;
+}
 
 function toPdf(text) {
   return new Promise((resolve, reject) => {
@@ -100,16 +125,16 @@ function toPdf(text) {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    if (hasBundledFont) {
-      doc.font(PDF_FONT);
-    } else {
-      doc.font('Courier');
-    }
+    const latinFont = hasBundledFont ? PDF_FONT : 'Courier';
     doc.fontSize(10);
 
     // Line by line so blank lines and indentation survive.
     for (const line of toLines(text)) {
-      doc.text(line === '' ? ' ' : line, { lineGap: 1.5 });
+      const runs = splitRuns(line === '' ? ' ' : line);
+      runs.forEach((run, index) => {
+        doc.font(run.bengali ? PDF_FONT_BENGALI : latinFont);
+        doc.text(run.text, { lineGap: 1.5, continued: index < runs.length - 1 });
+      });
     }
     doc.end();
   });

@@ -24,6 +24,7 @@ export function useReceiveFlow({ type, onOpen, otherTypePath }) {
 
   const codeRef = useRef('');
   const workingRef = useRef(false);
+  const prefilledRef = useRef(false);
 
   const setStep = useCallback((name) => setStepState(name), []);
 
@@ -127,10 +128,24 @@ export function useReceiveFlow({ type, onOpen, otherTypePath }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [setStep]);
 
-  // Share links arrive as /receive-text?code=482731
+  // A scanned QR code (or any code picked elsewhere) is looked up straight away.
+  const submitCode = useCallback(
+    (value) => {
+      const digits = sanitizeCodeInput(value);
+      setCodeValue(digits);
+      lookup(digits);
+    },
+    [lookup]
+  );
+
+  // Share links arrive as /receive-text?code=482731. The ref guard makes sure
+  // this runs once even when React StrictMode mounts effects twice in dev,
+  // otherwise a link would count two views.
   useEffect(() => {
+    if (prefilledRef.current) return;
     const prefill = codeFromUrl(location.search);
     if (prefill) {
+      prefilledRef.current = true;
       setCodeValue(prefill);
       codeRef.current = prefill;
       workingRef.current = false;
@@ -153,6 +168,7 @@ export function useReceiveFlow({ type, onOpen, otherTypePath }) {
     checking,
     unlocking,
     lookup,
+    submitCode,
     unlock,
     reset,
     navigate

@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { useReceiveFlow } from '../hooks/useReceiveFlow.js';
+import { useLimits, formatDuration } from '../lib/limits.js';
 import { formatBytes, formatRemaining } from '../lib/api.js';
 import { DownloadIcon, FileIcon } from '../lib/icons.jsx';
 import BusyButton from '../components/BusyButton.jsx';
+import { ScanIcon } from '../lib/icons.jsx';
 import InfoBlocks from '../components/InfoBlocks.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 
-const INFO_ITEMS = [
+// Loaded only when someone taps "Scan QR code", so the camera code stays out of the main bundle.
+const QrScanner = lazy(() => import('../components/QrScanner.jsx'));
+
+const buildInfoItems = ({ defaultExpiryMinutes }) => [
   {
     icon: '🚀',
     title: 'How to Download Files?',
@@ -31,7 +36,7 @@ const INFO_ITEMS = [
     body: (
       <p>
         Your privacy is our priority. Files are transferred over encrypted connections and automatically{' '}
-        <span className="accent">permanently deleted</span> after 24 hours (or sooner if the sender set a limit).
+        <span className="accent">permanently deleted</span> after {formatDuration(defaultExpiryMinutes)} (or sooner if the sender set a limit).
       </p>
     )
   },
@@ -50,7 +55,9 @@ const INFO_ITEMS = [
 
 export default function ReceiveFiles() {
   const toast = useToast();
+  const limits = useLimits();
   const [payload, setPayload] = useState(null);
+  const [scanning, setScanning] = useState(false);
 
   const {
     step,
@@ -63,6 +70,7 @@ export default function ReceiveFiles() {
     checking,
     unlocking,
     lookup,
+    submitCode,
     unlock,
     reset
   } = useReceiveFlow({
@@ -129,6 +137,22 @@ export default function ReceiveFiles() {
           >
             Receive Files
           </BusyButton>
+
+          <button className="btn btn--secondary btn--block mt-lg" type="button" onClick={() => setScanning(true)}>
+            <ScanIcon />
+            <span>Scan QR code</span>
+          </button>
+          {scanning && (
+            <Suspense fallback={null}>
+              <QrScanner
+                onClose={() => setScanning(false)}
+                onCode={(scanned) => {
+                  setScanning(false);
+                  submitCode(scanned);
+                }}
+              />
+            </Suspense>
+          )}
         </section>
       )}
 
@@ -218,7 +242,7 @@ export default function ReceiveFiles() {
         </section>
       )}
 
-      <InfoBlocks items={INFO_ITEMS} />
+      <InfoBlocks items={buildInfoItems(limits)} />
     </main>
   );
 }
