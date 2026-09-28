@@ -53,7 +53,17 @@ app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 app.use(
   express.static(path.join(__dirname, 'public'), {
     extensions: ['html'],
-    maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0
+    setHeaders(res, filePath) {
+      const isHashedAsset = /[\\/]assets[\\/][^\\/]+-[\w-]{8}\.(js|css)$/.test(filePath);
+      if (isHashedAsset) {
+        // File names change whenever the content does, so they can be cached for good.
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        // index.html and other fixed-name files must always be revalidated,
+        // otherwise a deploy keeps serving the old page (and old JS/CSS links).
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    }
   })
 );
 
@@ -87,6 +97,7 @@ app.get('*', (req, res) => {
   const route = req.path.length > 1 ? req.path.replace(/\/+$/, '') : req.path;
   // Unknown paths still get the app shell (it renders its own not-found page)
   // but with a real 404 status, so search engines don't index them.
+  res.set('Cache-Control', 'no-cache');
   res.status(APP_ROUTES.has(route) ? 200 : 404).sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

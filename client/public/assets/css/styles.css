@@ -1803,6 +1803,8 @@ select {
   position: relative;
   overflow: hidden;
   aspect-ratio: 1 / 1;
+  max-height: 60vh;
+  margin-inline: auto;
   margin-bottom: 0.75rem;
   background: #000;
   border-radius: var(--radius-field);

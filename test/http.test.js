@@ -115,3 +115,18 @@ test('uploads are refused when total storage would pass the cap', async () => {
     config.limits.maxTotalStorage = originalCap;
   }
 });
+
+test('hashed assets are cached for good, index.html is always revalidated', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const css = html.match(/href="(\/assets\/[^"]+\.css)"/);
+  assert.ok(css, 'the built page should link a hashed, bundled stylesheet');
+
+  const asset = await fetch(`${base}${css[1]}`);
+  assert.equal(asset.status, 200);
+  assert.match(asset.headers.get('cache-control'), /immutable/);
+
+  const page = await fetch(`${base}/`);
+  assert.equal(page.headers.get('cache-control'), 'no-cache');
+});
