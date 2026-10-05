@@ -98,7 +98,7 @@ Everything lives in `.env` (see `.env.example`) and is read once in `src/config.
 | `GOOGLE_CLIENT_SECRET` | *required* | Google OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | *required* | From `npm run google:auth` |
 | `GOOGLE_DRIVE_FOLDER_ID` | auto | Private Drive folder for uploads. If empty, a folder named `GOOGLE_DRIVE_FOLDER_NAME` is found or created on first upload. |
-| `GOOGLE_DRIVE_FOLDER_NAME` | `SendTo Uploads` | Name used for the auto-created folder |
+| `GOOGLE_DRIVE_FOLDER_NAME` | `YOUR_FOLDER_NAME` | Name used for the auto-created folder |
 | `MAX_FILE_SIZE` | `104857600` (100 MB) | Per-file upload limit |
 | `MAX_FILES` | `10` | Files per share |
 | `MAX_TOTAL_STORAGE` | `10737418240` (10 GB) | Total bytes of uploaded files kept at once. New uploads are refused with `STORAGE_FULL` past this, which protects your Drive quota. |
